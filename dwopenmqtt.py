@@ -48,6 +48,8 @@
 ##------------------------------------------------------------------------------------------------------------------
 
 import time
+import random
+import string
 import paho.mqtt.client as mqtt
 import ssl
 import threading
@@ -69,6 +71,8 @@ class dwOpen:
       
       msgId = 0;
       msgResp = "replyText";
+
+      _is_connected = False
       
       mbox_event = threading.Event()
       action_queue = Queue()
@@ -77,6 +81,41 @@ class dwOpen:
 
       tr50 = tr50protocol.TR50protocol()
       tr50.initTransport( "mqtt")
+
+
+      #------------------------------------------------------------------------------
+      #-- Function: _generate_id
+      #-- Purpose: Generate a random 64 character string
+      #------------------------------------------------------------------------------
+      def _generate_id(self):
+          str = ''.join(random.SystemRandom().choice(string.ascii_uppercase + string.digits) for _ in range(64))
+          return str
+
+      #------------------------------------------------------------------------------
+      #-- Function: _getClientId
+      #-- Purpose:  Get a random ID used to identify this client.  
+      #-- Arguments: pathname - Path to a file that contains a previously generated id
+      #-- Algorithm: If a file exists with the ID, just read and return it, else 
+      #              generate a random ID, stash it in the file, and return it.
+      #
+      #              Used to generate the ClientID for a "Thing".  Once a "Thing" 
+      #              connects once, it has to always use the same string as ClientID
+      #------------------------------------------------------------------------------
+      def _getClientId(self, pathname):
+
+        id = None
+
+        if (os.path.isfile(pathname)):
+             f  = open(pathname, 'rb')
+             id  = f.read()
+             f.close()
+        else:
+             id = self._generate_id()
+             f = open(pathname, 'wb')
+             f.write(id)
+             f.close()
+
+        return id
       
       #------------------------------------------------------------------------------
       #-- Function: getElementCount 
@@ -478,6 +517,8 @@ class dwOpen:
       # The callback for when the client receives a CONNACK response from the server.
       def on_connect(self, client, userdata, flags, rc):
           logging.debug("[MQTT] Connected, Result Code: %s",str(rc))
+          if (rc == 0):
+              self._is_connected = True
 
           # print("---- Subscribing to Topic 'reply'...")
           # Subscribing in on_connect() means that if we lose the connection and
@@ -534,12 +575,21 @@ class dwOpen:
       #-- Function: mqttConnect
       #-- Purpose:  Connect to MQTT Broker
       #------------------------------------------------------------------------------
-      def mqttConnect( self, hostURL, thingKey, applToken, certFilePath, userCallback ):
+      #def mqttConnect( self, hostURL, thingKey, applToken, certFilePath, userCallback ):
+      def mqttConnect( self, cfg, userCallback ):
           rc = -1;
           port = 1883
 
+          hostURL = cfg.getConfig('cloud_host')
+          thingKey = cfg.getConfig('device_id')
+          applToken = cfg.getConfig('cloud_token')
+          certFilePath = cfg.getConfig('certificate')
+          clientId = self._getClientId(cfg.getConfig('base_dir') + '/clientId')
+
+          print "clientID is " + clientId
+
           logging.debug("[MQTT] Configuring...")
-          self.client.reinitialise(client_id=thingKey, clean_session=True, userdata=None)
+          self.client.reinitialise(client_id=clientId, clean_session=True, userdata=None)
 
           self.client.username_pw_set( thingKey, applToken )
           if certFilePath != None:
@@ -567,14 +617,28 @@ class dwOpen:
           logging.debug("[MQTT] action thread started. ID = %s", str(action_thread.ident))
           
           # Connect to the deviceWise service
-          logging.debug("[MQTT] Connecting...")
+          self._is_connected = False
+          logging.debug("[MQTT] Attempting connect ...")
           self.client.connect(hostURL, port, 60)
-    
+
           # Start MQTT processing
           logging.debug("[MQTT] Starting MQTT Processing Loop...")
           self.client.loop_start()
 
-          time.sleep( 2 )
+          # Wait for confirmation that the connection worked
+          for i in range(0,6):
+              time.sleep (1)
+              if (self._is_connected == True):
+                  break
+             
+          if (self._is_connected == False):
+              return rc
+    
+          # Start MQTT processing
+          # logging.debug("[MQTT] Starting MQTT Processing Loop...")
+          # self.client.loop_start()
+
+          # time.sleep( 2 )
  
           # Subscribe to everything under the "reply" topic
           logging.debug("[MQTT} Subscribing to Topic 'reply'...")

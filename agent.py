@@ -21,6 +21,7 @@
 #==============================================================================
 
 # Load Python Import Libraries
+import config
 import sys
 import os
 import time
@@ -43,7 +44,7 @@ dwApiHost   = "api.devicewise.com"
 # dwOpen Member/Thing Assigned Tokens...
 # dwAppToken  = "8qlbtIxXAQv6LVGy"
 dwAppToken =  "4uIXhHGFkiyi4xJV"
-dwThingKey  = "ubuntuthing"
+# dwThingKey  = "ubuntuthing"
 
 verString = "PoC 0.2.0"
 baseDir = ""
@@ -89,7 +90,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         # If the user specified an absolute pathname then use it,
         # else assume it in the specified file store
         if device_path[0] != '/':
-            device_path = os.path.join(c2dDir, device_path)
+            device_path = os.path.join(config.getConfig['dnload_base_path'], device_path)
       
         # Get the name of the file on the cloud
         cloud_file = dwopen.getFramedText(ParamText, '\"cloudfile\":', ',')
@@ -112,7 +113,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
                 return
             
         # Send a request to the cloud to get URL and other info needed to GET the file
-        rc,crc,fileId,fileSize = dwopen.dwGetFile(dwThingKey, cloud_file)
+        rc,crc,fileId,fileSize = dwopen.dwGetFile(config.getConfig('device_id'), cloud_file)
         if rc != 0:
             errmsg = fileId
             errnum = fileSize
@@ -142,7 +143,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         dwopen.dwMailboxAck( MsgID, 0, msg, '' )  
             
         # Create a log entry on cloud that the file was transferred    
-        dwopen.dwLogPublish( dwThingKey, msg )
+        dwopen.dwLogPublish( config.getConfig('device_id'), msg )
                  
         return
     
@@ -176,7 +177,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         # If the user specified an absolute pathname then use it,
         # else assume it in the specified file store
         if device_path[0] != '/':
-             device_path = os.path.join(d2cDir, device_path)
+             device_path = os.path.join(config.getConfig['upload_base_path'], device_path)
         
         logging.info ("[ACTION] D2CFILEXFER: %s to %s", device_path, cloud_file)
 
@@ -188,7 +189,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
             return
 
         # Send request to the cloud to get the URL to POST the file to
-        rc,fileId = dwopen.dwPutFile(dwThingKey, cloud_file)
+        rc,fileId = dwopen.dwPutFile(config.getConfig('device_id'), cloud_file)
         post_url = "http://api.devicewise.com/file/" + fileId
             
         # Stream the file to the cloud
@@ -207,7 +208,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         dwopen.dwMailboxAck( MsgID, 0, msg, '' )            
              
         # Create a log entry on cloud that the file was transferred     
-        dwopen.dwLogPublish( dwThingKey, msg )
+        dwopen.dwLogPublish( config.getConfig('device_id'), msg )
                    
         return
         
@@ -229,7 +230,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         # If the user specified an absolute pathname then use it,
         # else assume it in the specified file store
         if device_path[0] != '/':
-            device_path = os.path.join(baseDir, device_path)
+            device_path = os.path.join(config.getConfig['base_dir'], device_path)
         
         logging.info ("[ACTION] SWUPDATE: %s", device_path)
 
@@ -238,7 +239,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
             msg = "Software Update failed. Improperly formatted file: " + device_path 
             logging.info ("[ACTION] SWUPDATE: %s", msg)
             dwopen.dwMailboxAck( MsgID, 0, msg, '' )
-            dwopen.dwLogPublish( dwThingKey, msg )
+            dwopen.dwLogPublish( config.getConfig('device_id'), msg )
             return 
 
         # Create a place to store the contents of the Update Package
@@ -260,7 +261,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
            msg = "Error processing update.json"
            logging.info ("[ACTION] SWUPDATE: %s", msg)
            dwopen.dwMailboxAck( MsgID, 0, msg, '' )
-           dwopen.dwLogPublish( dwThingKey, msg )
+           dwopen.dwLogPublish( config.getConfig('device_id'), msg )
            return
                
         # Execute the contents of the manifest
@@ -288,7 +289,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         dwopen.dwMailboxAck( MsgID, 0, msg, '' )            
              
         # Create a log entry on cloud that the file was transferred     
-        dwopen.dwLogPublish( dwThingKey, msg )
+        dwopen.dwLogPublish( condif.getConfig('device_id'), msg )
                    
         return
                
@@ -384,7 +385,7 @@ def processLoop():
             # Did the potentiometer value change?
             if sensor_value <> LastSensorValue:
                 logging.info ("[LOOP] Sending Metric \"CPU Load\"=%s", str(sensor_value))
-                rc = dwopen.dwPropertyPublish( dwThingKey, "cpuload", sensor_value )
+                rc = dwopen.dwPropertyPublish( config.getConfig('device_id'), "cpuload", sensor_value )
             
                 if sensor_value <= 20:
                     alarmState = 0;
@@ -398,7 +399,7 @@ def processLoop():
                         alarmMsg = "Load - HIGH"
                
                 logging.info ("[LOOP] Sending Alarm: %s", alarmMsg)     
-                rc = dwopen.dwAlarmPublish( dwThingKey, "cpuload", alarmState, alarmMsg )
+                rc = dwopen.dwAlarmPublish( config.getConfig('device_id'), "cpuload", alarmState, alarmMsg )
         
                 LastSensorValue = sensor_value
 
@@ -442,109 +443,12 @@ if __name__ == '__main__':
     #----------------------------------------------------------------------------- 
     # -- Locate and read the iot.cfg file
     #-----------------------------------------------------------------------------
-    cfgFilePath = os.path.abspath( str(args.cfgFile) )
-    try:
-        cfgFile = open(cfgFilePath, 'rb')
-        config = json.loads(cfgFile.read())
-        cfgFile.close()
-    except IOError, arg:
-         print "Could not find or read configuration file " + str(arg)
-         exit (1)
-    except JSONDecodeError, arg:
-        print "Could not decode configuration file " + str(arg)
+    config = config.Config()
+
+    ret = config.processConfigFile(args.cfgFile)
+    if (ret != 0):
+        print "Could not find or read configuration file " + str(arg)
         exit (1)
-
-    #----------------------------------------------------------------------------- 
-    # -- Figure out what the base runtime directory is.  Algorithm is:
-    # --  If the user specified it on the command line (--basedir) then use it.
-    # --  Else look for the base_dir key  in the config file and use it
-    # --  Else use the basename of the config file
-    #-----------------------------------------------------------------------------
-    if ( args.baseDir != None ):
-        baseDir = str(args.baseDir)
-    elif ('base_dir' in config.keys()):
-        baseDir = str(config['base_dir'])
-    else:
-        baseDir = os.path.dirname(cfgFilePath)
-
-    if ( os.path.isabs(baseDir) == False or os.path.isdir(baseDir) == False ):
-        print "Base Direcrory must be an an absolute pathname to a directory"
-        exit (1)
-
-    #----------------------------------------------------------------------------- 
-    # -- Parse the confiruration file and stash value away
-    #----------------------------------------------------------------------------- 
-
-    # Find the user specified  d->c directory
-    if ('upload_base_path' in config.keys()):
-        d2cDir = str(config['upload_base_path'])
-    else:
-        print "Config file error, must specify upload_base_path"
-        exit (1)
-
-    # If user gave an absolute path, use it, else assume d2cDir is under base dir
-    if os.path.isabs(d2cDir) == False:
-        d2cDir = os.path.join(baseDir, d2cDir)
-
-    # Find the user specified  c->d directory
-    if ('dnload_base_path' in config.keys()):
-        c2dDir = str(config['dnload_base_path'])
-    else:
-        print "Config file error, must specify dnload_base_path"
-        exit (1)
-   
-    # If user gave an absolute path, use it, else assume c2dDir is under base dir 
-    if os.path.isabs(c2dDir) == False:
-        c2dDir = os.path.join(baseDir, c2dDir)
-
-    # Find the user specified log directory
-    if ('log_dir' in config.keys()):
-        logDir = str(config['log_dir'])
-    else:
-        logDir = baseDir
-
-    # If user gave an absolute path, use it, else assume c2dDir is under base dir 
-    if os.path.isabs(logDir) == False:
-        logDir = os.path.join(baseDir, logDir)
-
-    # Find the user specified device_id
-    if ('device_id' in config.keys()):
-        dwThingKey = str(config['device_id'])
-    else:
-        print "Config file error, must specify device_id"
-        exit (1)
-
-    # Find the user specified  cloud_host
-    if ('cloud_host' in config.keys()):
-        dwApiHost = str(config['cloud_host'])
-    else:
-        print "Config file error, must specify cloud_host"
-        exit (1)
-
-    # Find the user specified  application token
-    if ('cloud_token' in config.keys()):
-        dwAppToken = str(config['cloud_token'])
-    else:
-        print "Config file error, must specify cloud_token"
-        exit (1)
-
-    # Find the certificate path if there is one
-    if ('certificate' in config.keys()):
-        certFilePath = str(config['certificate'])
-    else:
-        cerFilePath=None
-
-    
-    logging.debug( "Base Dir:    " + baseDir)
-    logging.debug( "C2D Dir:     " + c2dDir)
-    logging.debug( "D2C Dir:     " + d2cDir)
-    logging.debug( "Log Dir:     " + logDir)
-    logging.debug( "Config File: " + cfgFilePath)
-    logging.debug( "dwThingKey:  " + dwThingKey)
-    logging.debug( "dwApiHost:   " + dwApiHost)
-    logging.debug( "dwAppToken:  " + dwAppToken)
-    logging.debug( "Cert File:   " + certFilePath)
-
 
     #-----------------------------------------------------------------------------
     #-- Load the low level communication library
@@ -557,12 +461,16 @@ if __name__ == '__main__':
     #-- Connect to the Cloud Server
     #-----------------------------------------------------------------------------
     logging.debug("Connecting to Cloud Server...")
-    rc = dwopen.mqttConnect( dwApiHost, dwThingKey, dwAppToken, certFilePath, actionCallBack )
+    # rc = dwopen.mqttConnect( config.getConfig('cloud_host'),
+    #                          config.getConfig('device_id'),
+    #                          config.getConfig('cloud_token'),
+    #                          config.getConfig('certificate'),
+    #                          actionCallBack )
+    rc = dwopen.mqttConnect( config, actionCallBack )
     logging.debug("Connect Returned... rc = %s", str(rc))
-
-    logging.debug("Waiting 2 Seconds...")
-    time.sleep( 2 )
-    print ("Connected")
+    if (rc != 0):
+        logging.debug("Failed to connect");
+        os._exit(0) 
 
     #-----------------------------------------------------------------------------
     #-- Do something to prove we're connected
@@ -598,7 +506,7 @@ if __name__ == '__main__':
             else:
                 attribValue = r.text.rstrip('/')
             print "Setting " + attribKey + " to " + attribValue
-            rc = dwopen.dwSetAttribute( dwThingKey, attribKey, attribValue )
+            rc = dwopen.dwSetAttribute( config.getConfig('device_id'), attribKey, attribValue )
             if rc != 0:
                 raise Exception('Sending standard device  attributes')
         except Exception as issue:
@@ -609,9 +517,9 @@ if __name__ == '__main__':
     for attribute in attributes:
         try:
             attribKey   = attribute
-            attribValue = str(config[attribute])
+            attribValue = config.getConfig(attribute)
             print "Setting " + attribKey + " to " + attribValue
-            rc = dwopen.dwSetAttribute( dwThingKey, attribKey, attribValue )
+            rc = dwopen.dwSetAttribute( config.getConfig('device_id'), attribKey, attribValue )
             if rc != 0:
                 raise Exception('Sending standard device  attributes')
         except Exception as issue:

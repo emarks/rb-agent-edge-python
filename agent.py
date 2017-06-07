@@ -90,7 +90,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         # If the user specified an absolute pathname then use it,
         # else assume it in the specified file store
         if device_path[0] != '/':
-            device_path = os.path.join(config.getConfig['dnload_base_path'], device_path)
+            device_path = os.path.join(config.getConfig('dnload_base_path'), device_path)
       
         # Get the name of the file on the cloud
         cloud_file = dwopen.getFramedText(ParamText, '\"cloudfile\":', ',')
@@ -177,7 +177,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         # If the user specified an absolute pathname then use it,
         # else assume it in the specified file store
         if device_path[0] != '/':
-             device_path = os.path.join(config.getConfig['upload_base_path'], device_path)
+             device_path = os.path.join(config.getConfig('upload_base_path'), device_path)
         
         logging.info ("[ACTION] D2CFILEXFER: %s to %s", device_path, cloud_file)
 
@@ -230,7 +230,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         # If the user specified an absolute pathname then use it,
         # else assume it in the specified file store
         if device_path[0] != '/':
-            device_path = os.path.join(config.getConfig['base_dir'], device_path)
+            device_path = os.path.join(config.getConfig('base_dir'), device_path)
         
         logging.info ("[ACTION] SWUPDATE: %s", device_path)
 
@@ -289,7 +289,7 @@ def actionCallBack( MsgID, MethodName, ParamText ):
         dwopen.dwMailboxAck( MsgID, 0, msg, '' )            
              
         # Create a log entry on cloud that the file was transferred     
-        dwopen.dwLogPublish( condif.getConfig('device_id'), msg )
+        dwopen.dwLogPublish( config.getConfig('device_id'), msg )
                    
         return
                
